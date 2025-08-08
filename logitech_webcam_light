@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+
+import argparse
+import subprocess
+import sys
+import time
+import usb.core
+import usb.util
+
+VENDOR_ID = 0x046d
+PRODUCT_ID = 0xc900
+ENDPOINT = 0x02
+BUFFER_LENGTH = 64
+
+LIGHT_OFF = 0x00
+LIGHT_ON = 0x01
+TIMEOUT_MS = 3000
+MIN_BRIGHTNESS = 0x14
+MAX_BRIGHTNESS = 0xfa
+
+
+def setup():
+    dev = usb.core.find(idVendor=VENDOR_ID, idProduct=PRODUCT_ID)
+    reattach = False
+
+    if dev.is_kernel_driver_active(0):
+        reattach = True
+        dev.detach_kernel_driver(0)
+
+    dev.set_configuration()
+    usb.util.claim_interface(dev, 0)
+
+    return dev, reattach
+
+
+def teardown(dev, reattach):
+    usb.util.dispose_resources(dev)
+    if reattach:
+        dev.attach_kernel_driver(0)
+
+
+def set_light_state(state):
+    dev, reattach = setup()
+    dev.write(ENDPOINT, [0x11, 0xff, 0x04, 0x1c, state, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], TIMEOUT_MS)
+    dev.read(ENDPOINT, BUFFER_LENGTH)
+    teardown(dev, reattach)
+
+
+def get_webcam_state(webcam):
+    try:
+        subprocess.check_output(['lsof', webcam])
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+if __name__ == '__main__':
+    sys.stdout.reconfigure(line_buffering=True)
+
+    parser = argparse.ArgumentParser(description="Logitech Webcam Light")
+
+    parser.add_argument(
+        'webcam',
+        help='The webcam to watch for activity e.g. /dev/video0'
+    )
+
+    args = parser.parse_args()
+
+    webcam_state = None
+    while True:
+        new_webcam_state = get_webcam_state(args.webcam)
+        if new_webcam_state != webcam_state:
+            print(f'Webcam state changed from {webcam_state} to {new_webcam_state}')
+            set_light_state(LIGHT_ON if new_webcam_state else LIGHT_OFF)
+            webcam_state = new_webcam_state
+
+        time.sleep(5)
