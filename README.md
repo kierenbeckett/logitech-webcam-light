@@ -48,7 +48,7 @@ Create a systemd service at `~/.config/systemd/user/logitech-webcam-light.servic
 Description=Logitech Webcam Light
 
 [Service]
-ExecStart=/path/to/logitech_webcam_light
+ExecStart=/path/to/logitech_webcam_light /dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_F2AD346F-video-index0
 Restart=always
 RestartSec=60
 
